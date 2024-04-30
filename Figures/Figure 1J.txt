@@ -1,0 +1,44 @@
+#Load data
+load('./our_ZLC_naive_primed.RData') #ZLC, naive and primed data in this research, 100 cells for each cell type
+load('./published_8CLC_4CL.RData') #8CLC and 4CL data from GSE177689
+load('./s99.RData') #Human embryo data from CNP0001454
+
+
+
+
+#Prepare the files for integration
+sample.list <- list(
+  "our_zlc"=our_zlc,
+  "pub_8clc_4cl"=pub_8clc,
+  "s99"=s99)
+
+
+
+sample.list <- lapply(X = sample.list, FUN = function(x) {
+  x <- NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 3000)
+  x <- ScaleData(x, features = VariableFeatures(x), 
+                 vars.to.regress = c("nFeature_RNA"))
+})
+
+
+
+features <- SelectIntegrationFeatures(object.list = sample.list,nfeatures = 5000)
+anchors <- FindIntegrationAnchors(object.list = sample.list, anchor.features = features)
+
+
+#Integrate and draw UMAP
+merge_result <- IntegrateData(anchorset = anchors, features.to.integrate = all.genes)
+
+
+merge_result <- ScaleData(merge_result, features = VariableFeatures(merge_result), vars.to.regress = c("nFeature_RNA"))
+
+
+merge_result <- FindVariableFeatures(merge_result, selection.method = "vst", nfeatures = 2000)
+
+
+merge_result <- RunPCA(merge_result, npcs = 80)
+merge_result <- FindNeighbors(object = merge_result, dims = 1:20)
+merge_result <- RunUMAP(merge_result, dims = 1:6, seed.use = 410, n.neighbors = 30L, min.dist = 0.5)
+DimPlot(merge_result, label = T,group.by = "orig.ident")
+DimPlot(merge_result, label = T,group.by = "lineage")
