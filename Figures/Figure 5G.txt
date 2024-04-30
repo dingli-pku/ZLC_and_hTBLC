@@ -1,0 +1,41 @@
+#Load data
+load('./s0.RData') #Blastoid data in this research
+load('./s1.RData') #8CLC blastoid data from CNP0001454
+load('./s3.RData') #naive blastoid data from GSE150578
+load('./s4.RData') #naive blastoid data from GSE177689
+load('./s5.RData') #epsc blastoid data from GSE158971
+load('./s99.RData')#human embryo data from E-MTAB-3929
+
+
+#Prepare the files for integration
+sample.list <- list("s0"=s0,"s1"=s1,"s3"=s3,"s4"=s4,"s5"=s5,"s99"=s99)
+
+
+sample.list <- lapply(X = sample.list, FUN = function(x) {
+  x <- NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+
+
+features <- SelectIntegrationFeatures(object.list = sample.list,nfeatures = 2000)
+
+anchors <- FindIntegrationAnchors(object.list = sample.list, anchor.features = features)
+
+
+
+#Integrate and draw UMAP
+
+merge_blastoid <- IntegrateData(anchorset = anchors, features.to.integrate = all.genes)
+
+merge_blastoid <- ScaleData(merge_blastoid, features = VariableFeatures(merge_blastoid), vars.to.regress = c("nFeature_RNA"))
+
+
+merge_blastoid <- FindVariableFeatures(merge_blastoid, selection.method = "vst", nfeatures = 2000)
+
+merge_blastoid <- RunPCA(merge_blastoid, npcs = 80)
+ElbowPlot(merge_blastoid, ndims =50)
+
+merge_blastoid <- FindNeighbors(object = merge_blastoid, dims = 1:15)
+merge_blastoid <- RunUMAP(merge_blastoid, dims = 1:15, seed.use = 410)
+merge_blastoid <- FindClusters(merge_blastoid, resolution = 0.8)
+DimPlot(merge_blastoid, label = T,group.by = "orig.ident")

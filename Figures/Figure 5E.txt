@@ -1,0 +1,44 @@
+#Load data
+load('./s0.RData') #Blastoid data in this research
+load('./s99.RData')#Human embryo data from E-MTAB-3929
+
+
+#Prepare the files for integration
+sample.list <- list("s0"=s0,
+                    "s99"=s99)
+
+
+sample.list <- lapply(X = sample.list, FUN = function(x) {
+  x <- subset(x, subset = nFeature_RNA > 500 )
+  x <- NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 3000)
+  x <- ScaleData(x, features = VariableFeatures(x), 
+                 vars.to.regress = c("nFeature_RNA"))
+})
+
+
+features <- SelectIntegrationFeatures(object.list = sample.list,nfeatures = 6000)
+anchors <- FindIntegrationAnchors(object.list = sample.list, anchor.features = features)
+
+
+
+#Integrate and draw UMAP
+blastoid_integration <- IntegrateData(anchorset = anchors, features.to.integrate = all.genes)
+
+
+blastoid_integration <- ScaleData(blastoid_integration, features = VariableFeatures(blastoid_integration), vars.to.regress = c("nFeature_RNA"))
+
+
+
+
+blastoid_integration <- FindVariableFeatures(blastoid_integration, selection.method = "vst", nfeatures = 2000)
+
+
+blastoid_integration <- RunPCA(blastoid_integration, npcs = 80)
+blastoid_integration <- FindNeighbors(object = blastoid_integration, dims = 1:10)
+blastoid_integration <- RunUMAP(blastoid_integration, dims = 1:15, seed.use = 544)
+blastoid_integration <- FindClusters(blastoid_integration, resolution = 0.8)
+blastoid_integration <- RunUMAP(blastoid_integration , dims = 1:8, seed.use = 542, n.neighbors = 18L, min.dist = 0.40)
+
+DimPlot(blastoid_integration, label = T,group.by = "orig.ident")
+

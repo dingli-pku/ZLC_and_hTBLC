@@ -1,0 +1,78 @@
+#Load data
+load('./our_hTBLC_naive_primed.RData') #Data for this research
+load('./published_8CLC_naive_primed.RData') #Data for 8CLC research from CNP0001454
+load('./g1.RData') #Human data from GSE36552
+load('./g2.RData') #Human data from E-MTAB-3929, also named as s99
+load('./g3.RData') #Human data from GSE171820
+load('./g4.RData') #Human data from GSE136447
+
+
+#Downsample for embryo data, for TE lineage takes most of cells
+g2_noTE = subset(g2,subset=lineage!='TE_g2')
+g2_TE = subset(g2,subset=lineage=='TE_g2')
+g2_TE <- subset(x = g2_TE, downsample = 150)
+g2=merge(g2_noTE,y=c(g2_TE))
+table(g2[['lineage']])
+
+
+g3_noTE = subset(g3,subset=lineage!='TE_g3')
+g3_TE = subset(g3,subset=lineage=='TE_g3')
+g3_TE <- subset(x = g3_TE, downsample = 30)
+g3=merge(g3_noTE,y=c(g3_TE))
+g3=subset(g3,subset=lineage!='Unknown_g3')
+table(g3[['lineage']])
+
+
+
+g4 = subset(g4,subset=lineage!='PSA-EPI_g4')
+g4_CTB = subset(g4,subset=lineage=='CTB_g4')
+g4_STB = subset(g4,subset=lineage=='STB_g4')
+g4_EVT = subset(g4,subset=lineage=='EVT_g4')
+g4_TE =  merge(g4_CTB,y=c(g4_STB,g4_EVT))
+g4_TE <- subset(x = g4_TE, downsample = 100)
+g4 = subset(g4,subset=lineage!='CTB_g4')
+g4 = subset(g4,subset=lineage!='STB_g4')
+g4 = subset(g4,subset=lineage!='EVT_g4')
+g4=merge(g4,y=c(g4_TE))
+table(g4[['lineage']])
+
+
+#Prepare the files for integration
+sample.list <- list(
+  "t_our"=t_our,
+  "t_8clc"=t_8clc,
+  "t_embryo"=t_embryo,
+  "g2"=g2,
+  "g3"=g3,
+  "g4"=g4)
+
+
+
+sample.list <- lapply(X = sample.list, FUN = function(x) {
+  x <- NormalizeData(x, normalization.method = "LogNormalize", scale.factor = 10000)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 3000)
+  x <- ScaleData(x, features = VariableFeatures(x), 
+                 vars.to.regress = c("nFeature_RNA"))
+})
+
+
+
+features <- SelectIntegrationFeatures(object.list = sample.list,nfeatures = 5000)
+anchors <- FindIntegrationAnchors(object.list = sample.list, anchor.features = features)
+
+
+#Integrate and draw UMAP
+merge_result <- IntegrateData(anchorset = anchors, features.to.integrate = all.genes,k.weight = 90)
+
+
+merge_result <- ScaleData(merge_result, features = VariableFeatures(merge_result), vars.to.regress = c("nFeature_RNA"))
+
+
+merge_result <- FindVariableFeatures(merge_result, selection.method = "vst", nfeatures = 2000)
+
+
+merge_result <- RunPCA(merge_result, npcs = 80)
+merge_result <- FindNeighbors(object = merge_result, dims = 1:20)
+merge_result <- RunUMAP(merge_result, dims = 1:10, seed.use = 999, n.neighbors = 15L, min.dist = 0.15)
+DimPlot(merge_result, label = T,group.by = "orig.ident")
+DimPlot(merge_result, label = T,group.by = "lineage")
